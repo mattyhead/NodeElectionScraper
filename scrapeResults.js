@@ -47,28 +47,26 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
       .wait()
       .evaluate(function() {
         // now we're executing inside the browser scope.
-        var raceRows = document.querySelectorAll('form h3'),
+        var raceNames = document.querySelectorAll('form h3'),
+          raceDetail = document.querySelectorAll('form table.results'),
           result = [],
           tempParty = '',
           raceType = '', // 'candidates', 'retentions', 'questions'
           tempProgress;
   
-        for (var i = 0; i < raceRows.length; i++) {
+        for (var i = 0; i < raceNames.length; i++) {
   
-          var tempProgress = raceRows[i].nextSibling.innerText,
-            temp = raceRows[i].innerText.split(/-| |,/),
+          var tempProgress = raceNames[i].nextSibling.innerText,
+            temp = raceNames[i].innerText.split(/-| |,/),
             tempParty = (['R','REP','REPUBLICAN'].indexOf(temp[temp.length-1].toUpperCase(),0) ===0 ? 'rep' : false ) || 
                   (['D','DEM','DEMOCRATIC'].indexOf(temp[temp.length-1].toUpperCase(),0) ===0 ? 'dem' : false ) ||
-                  'all',
+                  'all', // this is going to be dumped as part of a css selector
   
-            temp = raceRows[i].innerText.split(/:/),
+            temp = raceNames[i].innerText.split(/:/),
             tempRace = temp[temp.length-1].trim(),
             detail = [],
             firstColumnText = '',
-            // candidates and retentions
-            candidateQuery = raceRows[i].nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling; 
-            // if none, this is a question
-            candidateQuery= (candidateQuery.querySelectorAll('tr').length === 0) ? candidateQuery.nextSibling : candidateQuery;
+            candidateQuery = raceDetail[i]; 
   
           if (tempProgress && tempProgress.indexOf('%')) {
             tempProgress = parseFloat(tempProgress.substring(0, tempProgress.indexOf('%')));
@@ -77,7 +75,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
           [].forEach.call(candidateQuery.querySelectorAll('tr'), function(el) {
             firstColumnText = el.firstChild.innerText;
             if ( ['Candidate Name', 'Decision'].indexOf(firstColumnText) < 0 ) {
-              switch (raceRows[i].previousSibling.previousSibling.innerText.split(' ')[0]) {
+              switch (raceNames[i].previousSibling.previousSibling.innerText.split(' ')[0]) {
                 case 'Race': 
                   raceType = 'candidates';
                 break;
@@ -96,7 +94,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
                     party: //el.querySelectorAll('td')[1].innerText.toUpperCase(),
                       (['R','REP','REPUBLICAN'].indexOf(el.querySelectorAll('td')[1].innerText.toUpperCase())>-1 ? 'rep' : false ) || 
                       (['D','DEM','DEMOCRATIC'].indexOf(el.querySelectorAll('td')[1].innerText.toUpperCase())>-1 ? 'dem' : false ) ||
-                      'ind',
+                      'ind', // this is going to be dumped as part of a css selector
                     votes: parseInt(el.querySelectorAll('td')[2].innerText),
                     percentage: parseFloat(el.querySelectorAll('td')[3].innerText)
                   });
@@ -152,8 +150,6 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
         lastRunDate = new Date(localStorage.getItem('lastRunDate'));
 
       // _______________ EVENTS
-      // im only definning these in here because I'd rather die than add *another* global, just to get a date in the final file.
-      // once we have wards, go get results
       Emitter.on('gotWards', 
         function (){
           wards.forEach(function (ward){

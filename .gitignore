@@ -4,4 +4,5 @@ node_modules
 
 # ignore these files
 config.js
-
+sftp-config.json
+results.json
