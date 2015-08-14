@@ -1,0 +1,7 @@
+# ignore these directories
+node_modules
+.c9
+
+# ignore these files
+config.js
+

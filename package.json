@@ -1,0 +1,30 @@
+{
+  "name": "node-philly-2015-election-scraper",
+  "version": "0.0.1",
+  "description": "A node scraper using nightmare for Philadelphia 2015 election results.",
+  "main": "scrapeResults.js",
+  "scripts": {
+    "start": "node scrapeResults.js"
+  },
+  "dependencies": {
+    "cron": "^1.0.9",
+    "fs": "0.0.2",
+    "nightmare": "^1.8.1",
+    "node-localstorage": "^0.5.0",
+    "node-phantom": "^0.2.5",
+    "phantomjs": "^1.9.6",
+    "request": "^2.55.0",
+    "scp2": "^0.2.2"
+  },
+  "engines": {
+    "node": "0.12.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://git.kclough.me/kclough/nodeelectionscraper"
+  },
+  "keywords": [
+    "node"
+  ],
+  "license": "MIT"
+}
