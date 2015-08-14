@@ -23,8 +23,8 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
       .goto(electionResultsUrl)
       .evaluate(function(){
         var w = [];
-        [].forEach.call(document.getElementById('cboGeography'), function(el) {
-          w.push(el.innerText.trim());
+        [].forEach.call(document.getElementById('cboGeography'), function(el, i) {
+          w.push({id:el.index,value:el.innerText.trim()});
         });
         return w;
       },function(w) {
@@ -45,6 +45,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
     nm
       .goto(electionResultsUrl)
       .type('#cboGeography',ward)
+      .select('#cboGeography',ward.id)
       .wait()
       .click('input[name="btnNext"]')
       .wait()
@@ -56,15 +57,15 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
           tempParty = '',
           raceType = '', // 'candidates', 'retentions', 'questions'
           tempProgress;
-  
+
         for (var i = 0; i < raceNames.length; i++) {
-  
+
           var tempProgress = raceNames[i].nextSibling.innerText,
             temp = raceNames[i].innerText.split(/-| |,/),
             tempParty = (['R','REP','REPUBLICAN'].indexOf(temp[temp.length-1].toUpperCase(),0) ===0 ? 'rep' : false ) || 
                   (['D','DEM','DEMOCRATIC'].indexOf(temp[temp.length-1].toUpperCase(),0) ===0 ? 'dem' : false ) ||
                   'all', // this is going to be dumped as part of a css selector
-  
+
             temp = raceNames[i].innerText.split(/:/),
             tempRace = temp[temp.length-1].trim(),
             detail = [],
@@ -74,7 +75,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
           if (tempProgress && tempProgress.indexOf('%')) {
             tempProgress = parseFloat(tempProgress.substring(0, tempProgress.indexOf('%')));
           }
-  
+
           [].forEach.call(candidateQuery.querySelectorAll('tr'), function(el) {
             firstColumnText = el.firstChild.innerText;
             if ( ['Candidate Name', 'Decision'].indexOf(firstColumnText) < 0 ) {
@@ -89,7 +90,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
                   raceType = 'questions';
                 break;
               }
-  
+
               switch (raceType) {
                 case 'candidates':
                   detail.push({ // candidates
@@ -133,7 +134,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
         return result;
       },function(result) {
         var obj = {};
-        obj[ward] = result;
+        obj[ward.value] = result;
         results.push(obj);
       })
       .run(function(err, nightmare) {
