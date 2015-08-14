@@ -9,6 +9,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
   Fs = require("fs"),
   Events = require('events').EventEmitter,
   Nightmare = require('nightmare'),
+  nm = new Nightmare(),
   Request = require('request'),
   wards=[],
   results=[],
@@ -18,7 +19,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
   uses: Nightmare, Events
 */
   getNavData = function() {
-    new Nightmare()
+    nm
       .goto(electionResultsUrl)
       .evaluate(function(){
         var w = [];
@@ -28,25 +29,32 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
         return w;
       },function(w) {
         wards=w;
-        Emitter.emit('gotWards');
       })
       .run(function(err, nightmare) {
         if (err) console.log("error:",err,'nightmare:',nightmare);
+        else Emitter.emit('gotWards');
       });
   },
 
 /*  pull an indivicual ward's votes
   uses: Nightmare
 */
-  getResult = function(callback, ward) {
-    new Nightmare()
+  
+  getResults = function() {
+    var ward = wards.pop();
+    console.log('ward:', ward);
+    nm
       .goto(electionResultsUrl)
-         .type('#cboGeography',ward)
+      .url(function (u) {console.log('url:', u)});
+
+    nm
+      .type('#cboGeography',ward)
       .wait()
       .click('input[name="btnNext"]')
       .wait()
       .evaluate(function() {
         // now we're executing inside the browser scope.
+        console.log('location:', document.location);
         var raceNames = document.querySelectorAll('form h3'),
           raceDetail = document.querySelectorAll('form table.results'),
           result = [],
@@ -129,12 +137,19 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
         }
         return result;
       },function(result) {
-        if (callback) {
-          callback(result);
-        }
+        var obj = {};
+        obj[ward] = result;
+        results.push(obj);
       })
       .run(function(err, nightmare) {
         if (err) console.log("error:",err,'nightmare:',nightmare);
+
+        // If we still have wards to get results for call getResults again
+        if (wards.length) {
+          getResults();
+        } else {
+          Emitter.emit('gotVotes');
+        }
       });
   },
 
@@ -150,50 +165,33 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
         lastRunDate = new Date(localStorage.getItem('lastRunDate'));
 
       // _______________ EVENTS
-      Emitter.on('gotWards', 
-        function (){
-          wards.forEach(function (ward){
-            getResult(function(result) {
-              var obj = {};
-              obj[ward] = result;
-              results.push(obj);
-              Emitter.emit('gotVotes');
-            },ward)
-          });
-        }
-      );
+      Emitter.on('gotWards', getResults);
       
       // check if results are complete, store if so
       Emitter.on('gotVotes', function(){
         var toWrite={};toWrite.results={};
-        if (results.length === wards.length){
-          // we have one set of results per ward, write the file.
-          results.forEach(function(result){
-            for (var ward in result) {
-              toWrite.results[ward] = result[ward];
-            }
-          });
-          // Eenh, I thought this might be nice to have, but I haven't done diddly with it.
+        results.forEach(function(result){
+          for (var ward in result) {
+            toWrite.results[ward] = result[ward];
+          }
+        });
+        // Eenh, I thought this might be nice to have, but I haven't done diddly with it.
 //          toWrite.index=wards;
-          toWrite.lastModifiedDate=lastModifiedDate;
-          Fs.writeFile(outputFileName, JSON.stringify(toWrite), "utf8", function() {
-            console.log('Complete results are in...', 'wards: ' + wards.length, 'results: ' + results.length);
-            localStorage.setItem('lastRunDate', lastModifiedDate);
-            var scp = require('scp2'),
-              config = require('./config');
+        toWrite.lastModifiedDate=lastModifiedDate;
+        Fs.writeFile(outputFileName, JSON.stringify(toWrite), "utf8", function() {
+          console.log('Complete results are in...', 'wards: ' + wards.length, 'results: ' + results.length);
+          localStorage.setItem('lastRunDate', lastModifiedDate);
+          var scp = require('scp2'),
+            config = require('./config');
 
-            scp.scp(
-              "results.json",config.uname+":"+config.password+"@"+config.domainname+":"+config.path,
-              function(err) {
-                if (err) console.log(err);
-                  else console.log('File transferred.')  
-              }
-            );
-          });
-        } else {
-          // nothing to do yet.  Say so.
-          console.log('Results in, but not complete yet...', 'wards: ' + wards.length, 'results: ' + results.length);
-        }
+          scp.scp(
+            "results.json",config.uname+":"+config.password+"@"+config.domainname+":"+config.path,
+            function(err) {
+              if (err) console.log(err);
+                else console.log('File transferred.')  
+            }
+          );
+        });
       });
 
       console.log('Last Run Date: ', lastRunDate);
