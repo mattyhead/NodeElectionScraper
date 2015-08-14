@@ -42,19 +42,14 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
   
   getResults = function() {
     var ward = wards.pop();
-    console.log('ward:', ward);
     nm
       .goto(electionResultsUrl)
-      .url(function (u) {console.log('url:', u)});
-
-    nm
       .type('#cboGeography',ward)
       .wait()
       .click('input[name="btnNext"]')
       .wait()
       .evaluate(function() {
         // now we're executing inside the browser scope.
-        console.log('location:', document.location);
         var raceNames = document.querySelectorAll('form h3'),
           raceDetail = document.querySelectorAll('form table.results'),
           result = [],
