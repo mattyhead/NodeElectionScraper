@@ -1,8 +1,9 @@
 var config = {};
 
-config.uname="uname",
-config.password="password",
-config.domainname="domain.com",
-config.path="path/from/home/of/user";
+config.instances=6,  \\ number nightmare instances allowed
+config.uname="",      \\ ssh login -- we'll test for this to decide whether to push over ssh
+config.password="",
+config.server="",
+config.path="";
 
 module.exports = config;
