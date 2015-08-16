@@ -43,7 +43,6 @@ electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_R
   getResults = function (nm, group) {
     var ward = group.pop();
     nm.goto(electionResultsUrl)
-      .type('#cboGeography', ward)
       .select('#cboGeography', ward.id)
       .wait()
       .click('input[name="btnNext"]')
