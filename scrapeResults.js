@@ -17,67 +17,69 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
   store wards for use
   uses: Nightmare, Events
 */
-  getNavData = function() {
-    new Nightmare()
+  getNavData = function(nm) {
+    nm
       .goto(electionResultsUrl)
       .evaluate(function(){
         var w = [];
-        [].forEach.call(document.getElementById('cboGeography'), function(el) {
-          w.push(el.innerText.trim());
+        [].forEach.call(document.getElementById('cboGeography'), function(el, i) {
+          w.push({id:el.index,value:el.innerText.trim()});
         });
         return w;
       },function(w) {
         wards=w;
-        Emitter.emit('gotWards');
       })
       .run(function(err, nightmare) {
         if (err) console.log("error:",err,'nightmare:',nightmare);
+        else Emitter.emit('gotWards');
       });
   },
 
 /*  pull an indivicual ward's votes
   uses: Nightmare
 */
-  getResult = function(callback, ward) {
-    new Nightmare()
+  
+  getResults = function(nm, group) {
+    var ward = group.pop();
+    console.log(ward, new Date());
+    nm
       .goto(electionResultsUrl)
-         .type('#cboGeography',ward)
+      .type('#cboGeography',ward)
+      .select('#cboGeography',ward.id)
       .wait()
       .click('input[name="btnNext"]')
       .wait()
       .evaluate(function() {
         // now we're executing inside the browser scope.
-        var raceRows = document.querySelectorAll('form h3'),
+        var raceNames = document.querySelectorAll('form h3'),
+          raceDetail = document.querySelectorAll('form table.results'),
           result = [],
           tempParty = '',
           raceType = '', // 'candidates', 'retentions', 'questions'
           tempProgress;
-  
-        for (var i = 0; i < raceRows.length; i++) {
-  
-          var tempProgress = raceRows[i].nextSibling.innerText,
-            temp = raceRows[i].innerText.split(/-| |,/),
+
+        for (var i = 0; i < raceNames.length; i++) {
+
+          var tempProgress = raceNames[i].nextSibling.innerText,
+            temp = raceNames[i].innerText.split(/-| |,/),
             tempParty = (['R','REP','REPUBLICAN'].indexOf(temp[temp.length-1].toUpperCase(),0) ===0 ? 'rep' : false ) || 
                   (['D','DEM','DEMOCRATIC'].indexOf(temp[temp.length-1].toUpperCase(),0) ===0 ? 'dem' : false ) ||
-                  'all',
-  
-            temp = raceRows[i].innerText.split(/:/),
+                  'all', // this is going to be dumped as part of a css selector
+
+            temp = raceNames[i].innerText.split(/:/),
             tempRace = temp[temp.length-1].trim(),
             detail = [],
             firstColumnText = '',
-            // candidates and retentions
-            candidateQuery = raceRows[i].nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling; 
-            // if none, this is a question
-            candidateQuery= (candidateQuery.querySelectorAll('tr').length === 0) ? candidateQuery.nextSibling : candidateQuery;
+            candidateQuery = raceDetail[i]; 
   
           if (tempProgress && tempProgress.indexOf('%')) {
             tempProgress = parseFloat(tempProgress.substring(0, tempProgress.indexOf('%')));
           }
-  
+
           [].forEach.call(candidateQuery.querySelectorAll('tr'), function(el) {
             firstColumnText = el.firstChild.innerText;
             if ( ['Candidate Name', 'Decision'].indexOf(firstColumnText) < 0 ) {
-              switch (raceRows[i].previousSibling.previousSibling.innerText.split(' ')[0]) {
+              switch (raceNames[i].previousSibling.previousSibling.innerText.split(' ')[0]) {
                 case 'Race': 
                   raceType = 'candidates';
                 break;
@@ -88,7 +90,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
                   raceType = 'questions';
                 break;
               }
-  
+
               switch (raceType) {
                 case 'candidates':
                   detail.push({ // candidates
@@ -96,7 +98,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
                     party: //el.querySelectorAll('td')[1].innerText.toUpperCase(),
                       (['R','REP','REPUBLICAN'].indexOf(el.querySelectorAll('td')[1].innerText.toUpperCase())>-1 ? 'rep' : false ) || 
                       (['D','DEM','DEMOCRATIC'].indexOf(el.querySelectorAll('td')[1].innerText.toUpperCase())>-1 ? 'dem' : false ) ||
-                      'ind',
+                      'ind', // this is going to be dumped as part of a css selector
                     votes: parseInt(el.querySelectorAll('td')[2].innerText),
                     percentage: parseFloat(el.querySelectorAll('td')[3].innerText)
                   });
@@ -131,12 +133,19 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
         }
         return result;
       },function(result) {
-        if (callback) {
-          callback(result);
-        }
+        var obj = {};
+        obj[ward.value] = result;
+        results.push(obj);
       })
       .run(function(err, nightmare) {
         if (err) console.log("error:",err,'nightmare:',nightmare);
+
+        // If we still have wards to get results for call getResults again
+        if (group.length) {
+          getResults(nm, group);
+        } else {
+          Emitter.emit('gotVotes');
+        }
       });
   },
 
@@ -152,52 +161,49 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
         lastRunDate = new Date(localStorage.getItem('lastRunDate'));
 
       // _______________ EVENTS
-      // im only definning these in here because I'd rather die than add *another* global, just to get a date in the final file.
-      // once we have wards, go get results
-      Emitter.on('gotWards', 
-        function (){
-          wards.forEach(function (ward){
-            getResult(function(result) {
-              var obj = {};
-              obj[ward] = result;
-              results.push(obj);
-              Emitter.emit('gotVotes');
-            },ward)
-          });
-        }
-      );
+      Emitter.on('gotWards', function(){
+ 		var counter = 0, limit = wards.length, group = [];
+
+      	wards.forEach(function(ward, ix){
+      	  group.push(ward);
+      	  counter++;
+      	  if (counter===9 || ix===limit-1) {
+      	  	getResults(new Nightmare(), group);
+      	  	counter = 0;
+      	  	group = [];
+      	  }
+      	});
+      });
       
       // check if results are complete, store if so
       Emitter.on('gotVotes', function(){
-        var toWrite={};toWrite.results={};
-        if (results.length === wards.length){
-          // we have one set of results per ward, write the file.
-          results.forEach(function(result){
-            for (var ward in result) {
-              toWrite.results[ward] = result[ward];
-            }
-          });
-          // Eenh, I thought this might be nice to have, but I haven't done diddly with it.
-//          toWrite.index=wards;
-          toWrite.lastModifiedDate=lastModifiedDate;
-          Fs.writeFile(outputFileName, JSON.stringify(toWrite), "utf8", function() {
-            console.log('Complete results are in...', 'wards: ' + wards.length, 'results: ' + results.length);
-            localStorage.setItem('lastRunDate', lastModifiedDate);
-            var scp = require('scp2'),
-              config = require('./config');
+      	if (results.length === wards.length) {
+	        var toWrite={};toWrite.results={};
+	        results.forEach(function(result){
+	          for (var ward in result) {
+	            toWrite.results[ward] = result[ward];
+	          }
+	        });
+	        // Eenh, I thought this might be nice to have, but I haven't done diddly with it.
+	//          toWrite.index=wards;
+	        toWrite.lastModifiedDate=lastModifiedDate;
+	        Fs.writeFile(outputFileName, JSON.stringify(toWrite), "utf8", function() {
+	          console.log('Complete results are in...', 'wards: ' + wards.length, 'results: ' + results.length);
+	          localStorage.setItem('lastRunDate', lastModifiedDate);
+	          var scp = require('scp2'),
+	            config = require('./config');
 
-            scp.scp(
-              "results.json",config.uname+":"+config.password+"@"+config.domainname+":"+config.path,
-              function(err) {
-                if (err) console.log(err);
-                  else console.log('File transferred.')  
-              }
-            );
-          });
-        } else {
-          // nothing to do yet.  Say so.
-          console.log('Results in, but not complete yet...', 'wards: ' + wards.length, 'results: ' + results.length);
-        }
+	          scp.scp(
+	            "results.json",config.uname+":"+config.password+"@"+config.domainname+":"+config.path,
+	            function(err) {
+	              if (err) console.log(err);
+	                else console.log('File transferred.')  
+	            }
+	          );
+	        });
+	      } else {
+	      	console.log("completed one segment", new Date());
+	      }
       });
 
       console.log('Last Run Date: ', lastRunDate);
@@ -206,7 +212,7 @@ var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/ht
       // get the ball rolling, by checking on the published wards fro this election
       if (lastRunDate < lastModifiedDate) {
         console.log('Running Update');
-        getNavData();
+        getNavData(new Nightmare());
       }
     });
   },
