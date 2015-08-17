@@ -1,20 +1,20 @@
 // testing election url
 var //electionResultsWaybackUrl = 'https://web.archive.org/web/20110610093322/http://filter.phillyelectionresults.com/comprehensive.aspx',
-electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_Results.html',
+  config = require('./config'),
+  electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_Results.html',
   electionResultsFormUrl = 'http://filter.phillyelectionresults.com/comprehensive.aspx',
   //electionResultsTestUrl = 'http://whowon.fortuit.us/all_wards.html',
   electionResultsUrl = electionResultsFormUrl,
   outputFileName = 'results.json',
-  LocalStorage = require('node-localstorage')
-    .LocalStorage,
+  LocalStorage = require('node-localstorage').LocalStorage,
   Fs = require("fs"),
-  Events = require('events')
-    .EventEmitter,
+  Events = require('events').EventEmitter,
   Nightmare = require('nightmare'),
   Request = require('request'),
   wards = [],
   results = [],
-  /*   work out which wards are availableto pull,
+
+/*   work out which wards are availableto pull,
   store wards objects for use: 
   uses: Nightmare
 */
@@ -37,11 +37,12 @@ electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_R
         else Emitter.emit('gotWards');
       });
   },
-  /*  pull an indivicual ward's votes
+  
+/*  pull an indivicual ward's votes
   uses: Nightmare
 */
-  getResults = function (nm, group) {
-    var ward = group.pop();
+  getResults = function (nm, grp) {
+    var ward = grp.pop();
     nm.goto(electionResultsUrl)
       .select('#cboGeography', ward.id)
       .wait()
@@ -58,7 +59,10 @@ electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_R
         for (var i = 0; i < raceNames.length; i++) {
           var tempProgress = raceNames[i].nextSibling.innerText,
             temp = raceNames[i].innerText.split(/-| |,/),
-            tempParty = (['R', 'REP', 'REPUBLICAN'].indexOf(temp[temp.length - 1].toUpperCase(), 0) === 0 ? 'rep' : false) || (['D', 'DEM', 'DEMOCRATIC'].indexOf(temp[temp.length - 1].toUpperCase(), 0) === 0 ? 'dem' : false) || 'all', // this is going to be dumped as part of a css selector
+            tempParty = 
+              (['R', 'REP', 'REPUBLICAN'].indexOf(temp[temp.length - 1].toUpperCase(), 0) === 0 ? 'rep' : false) || 
+              (['D', 'DEM', 'DEMOCRATIC'].indexOf(temp[temp.length - 1].toUpperCase(), 0) === 0 ? 'dem' : false) || 
+              'all', // this is going to be dumped as part of a css selector
             temp = raceNames[i].innerText.split(/:/),
             tempRace = temp[temp.length - 1].trim(),
             detail = [],
@@ -86,12 +90,14 @@ electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_R
                 detail.push({ // candidates
                   name: el.querySelectorAll('td')[0].innerText.replace(/[^\w\s\,\.]/gi, ''),
                   party: //el.querySelectorAll('td')[1].innerText.toUpperCase(),
-                  (['R', 'REP', 'REPUBLICAN'].indexOf(el.querySelectorAll('td')[1].innerText.toUpperCase()) > -1 ? 'rep' : false) || (['D', 'DEM', 'DEMOCRATIC'].indexOf(el.querySelectorAll('td')[1].innerText.toUpperCase()) > -1 ? 'dem' : false) || 'ind', // this is going to be dumped as part of a css selector
+                    (['R', 'REP', 'REPUBLICAN'].indexOf(el.querySelectorAll('td')[1].innerText.toUpperCase()) > -1 ? 'rep' : false) || 
+                    (['D', 'DEM', 'DEMOCRATIC'].indexOf(el.querySelectorAll('td')[1].innerText.toUpperCase()) > -1 ? 'dem' : false) || 
+                    'ind', // this is going to be dumped as part of a css selector
                   votes: parseInt(el.querySelectorAll('td')[2].innerText),
                   percentage: parseFloat(el.querySelectorAll('td')[3].innerText)
                 });
                 break;
-                /*
+/*
                 case 'retentions': // ignoring for now
                   detail.push({ // retentions
                     name: el.querySelectorAll('td')[0].innerText,
@@ -123,19 +129,20 @@ electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_R
       }, function (result) {
         var obj = {};
         obj[ward.value] = result;
+console.log('ward', ward, 'result', result);
         results.push(obj);
-      })
+      },ward)
       .run(function (err, nightmare) {
         if (err) console.log("error:", err, 'nightmare:', nightmare);
         // If we still have wards to get results for call getResults again
-        if (group.length) {
-          getResults(nm, group);
+        if (grp.length) {
+          getResults(nm, grp);
         } else {
           Emitter.emit('gotVotes');
         }
       });
   },
-  /* 
+/* 
   init
   uses Events, Fs
 */
@@ -152,7 +159,8 @@ electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_R
         wards.forEach(function (ward, i) {
           group.push(ward);
           counter++;
-          if (counter === parseInt(limit/6) || i === limit - 1) {
+          if (counter === parseInt(limit/config.instances) || i === limit - 1) {
+console.log(group);
             getResults(new Nightmare(), group);
             counter = 0;
             group = [];
@@ -173,12 +181,13 @@ electionResultsStaticUrl = 'http://phillyelectionresults.com/Citywide_Election_R
           Fs.writeFile(outputFileName, JSON.stringify(toWrite), "utf8", function () {
             console.log('Complete results are in...', 'wards: ' + wards.length, 'results: ' + results.length);
             localStorage.setItem('lastRunDate', lastModifiedDate);
-            var scp = require('scp2'),
-              config = require('./config');
-            scp.scp("results.json", config.uname + ":" + config.password + "@" + config.domainname + ":" + config.path, function (err) {
-              if (err) console.log(err);
-              else console.log('File transferred.')
-            });
+            if (config.uname.length) {
+              var scp = require('scp2');
+              scp.scp("results.json", config.uname + ":" + config.password + "@" + config.server + ":" + config.path, function (err) {
+                if (err) console.log(err);
+                else console.log('File transferred.')
+              });
+            }
           });
         } else {
           console.log("completed one segment", new Date());
